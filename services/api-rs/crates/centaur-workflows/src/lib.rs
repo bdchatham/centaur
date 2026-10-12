@@ -39,6 +39,8 @@ use tracing::{info, warn};
 
 pub mod slack_button_feedback;
 pub mod slack_buttons;
+#[cfg(test)]
+mod updated_at_completion_tests;
 
 pub const WORKFLOW_QUEUE: &str = "centaur_workflows";
 pub const WORKFLOW_SLACK_LIVE_QUEUE: &str = "centaur_workflows_slack_live";

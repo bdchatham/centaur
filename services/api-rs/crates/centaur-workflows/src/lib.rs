@@ -974,7 +974,7 @@ impl WorkflowRuntime {
                 t.completed_payload,
                 r.failure_reason,
                 t.enqueue_at as created_at,
-                greatest(t.enqueue_at, coalesce(r.available_at, t.enqueue_at)) as updated_at
+                greatest(t.enqueue_at, nullif(r.available_at, 'infinity'::timestamptz), r.started_at, r.completed_at, r.failed_at, t.cancelled_at) as updated_at
             from {task_table} t
             join {run_table} r on r.run_id = t.last_attempt_run
             where (
@@ -1032,7 +1032,7 @@ impl WorkflowRuntime {
                 t.completed_payload,
                 r.failure_reason,
                 t.enqueue_at as created_at,
-                greatest(t.enqueue_at, coalesce(r.available_at, t.enqueue_at)) as updated_at
+                greatest(t.enqueue_at, nullif(r.available_at, 'infinity'::timestamptz), r.started_at, r.completed_at, r.failed_at, t.cancelled_at) as updated_at
             from {run_table} r
             join {task_table} t on t.task_id = r.task_id
             where r.run_id = $1::uuid

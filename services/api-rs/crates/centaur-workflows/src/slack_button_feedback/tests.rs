@@ -162,10 +162,20 @@ async fn durable_feedback_restores_rejection_and_failure_and_preserves_results_o
         return Ok(());
     };
     let pool = sqlx::PgPool::connect(&url).await?;
-    let installed: bool =
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'absurd')")
-            .fetch_one(&pool)
-            .await?;
+    // Other DB-backed tests install the same non-idempotent migration on a fresh
+    // database; give them a moment to finish instead of racing them.
+    let mut installed = false;
+    for _ in 0..30 {
+        installed = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'absurd')",
+        )
+        .fetch_one(&pool)
+        .await?;
+        if installed {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
     if !installed {
         sqlx::raw_sql(include_str!(
             "../../../centaur-session-sqlx/migrations/0007_absurd_workflows.sql"

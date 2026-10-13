@@ -1,12 +1,12 @@
 - id: "1"
-  title: Add started_at and completed_at to the WorkflowRun type
+  title: Add a response type carrying started_at and completed_at
   description: >-
-    Add nullable `started_at` and `completed_at` fields to `WorkflowRun` in centaur-workflows, serialized as RFC 3339 or explicit `null` (CAP-1, CAP-2). The existing `workflow_run_timestamps_serialize_as_rfc3339` test in centaur-workflows (it currently asserts only `created_at` and `updated_at`) is edited to build the run with the new fields and assert RFC 3339 strings when set, plus a `None` case asserting the keys are present as `null`.
+    Add a new response type in centaur-workflows that `#[serde(flatten)]`s `WorkflowRun` and adds nullable `started_at` and `completed_at`, serialized as RFC 3339 or explicit `null`, leaving `WorkflowRun` and its existing literals and tests untouched (CAP-1, CAP-2). Prove it with a new test file under `services/api-rs/crates/centaur-workflows/tests/` asserting the flattened existing fields, RFC 3339 strings when set, and keys present as `null` when unset.
 - id: "2"
   title: Populate the timestamps from Absurd state for all queues
   description: >-
-    Select the run and task timestamp columns in `list_runs_for_queue` and `get_run_for_queue` and map them in `workflow_run_from_row`, covering all four workflow queues (CAP-1, CAP-2, CAP-3). Database-backed tests assert pending, running, completed, failed, cancelled, and retried runs yield the spec's start and completion values.
+    Select the run and task timestamp columns in the list and get queries and have `list_runs` and `get_run` return the new response type for all four workflow queues, without changing what `cancel_run` needs (CAP-1, CAP-2, CAP-3). Prove it with a new database-backed test file under `services/api-rs/crates/centaur-workflows/tests/` covering pending, running, completed, failed, cancelled, and retried runs.
 - id: "3"
   title: Return the timestamps from the list and get endpoints
   description: >-
-    Verify `GET /api/workflows/runs` and `GET /api/workflows/runs/{run_id}` include `started_at` and `completed_at` on every run with identical values for the same run (CAP-3). Rust tests in centaur-api-server cover both routes and the `null`-until-set behavior, with no change to existing fields.
+    Verify `GET /api/workflows/runs` and `GET /api/workflows/runs/{run_id}` return `started_at` and `completed_at` on every run with identical values for the same run and no change to existing fields (CAP-3). Prove it with a new test file under `services/api-rs/crates/centaur-api-server/tests/` covering both routes and the `null`-until-set behavior.

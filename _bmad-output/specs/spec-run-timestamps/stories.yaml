@@ -1,7 +1,7 @@
 - id: "1"
   title: Add started_at and completed_at to the WorkflowRun type
   description: >-
-    Add nullable `started_at` and `completed_at` fields to `WorkflowRun` in centaur-workflows, serialized as RFC 3339 or explicit `null` (CAP-1, CAP-2). A unit test extends the existing timestamp serialization test to cover set and null values and the always-present keys.
+    Add nullable `started_at` and `completed_at` fields to `WorkflowRun` in centaur-workflows, serialized as RFC 3339 or explicit `null` (CAP-1, CAP-2). The existing `workflow_run_timestamps_serialize_as_rfc3339` test in centaur-workflows (it currently asserts only `created_at` and `updated_at`) is edited to build the run with the new fields and assert RFC 3339 strings when set, plus a `None` case asserting the keys are present as `null`.
 - id: "2"
   title: Populate the timestamps from Absurd state for all queues
   description: >-

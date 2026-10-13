@@ -5750,7 +5750,7 @@ mod tests {
 
 /// mana CI smoke target; never merged.
 pub fn mana_smoke() -> u32 {
-    1
+    2
 }
 
 #[cfg(test)]

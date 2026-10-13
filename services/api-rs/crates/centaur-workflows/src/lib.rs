@@ -5747,3 +5747,8 @@ mod tests {
         assert!(metadata.get("persona").is_none());
     }
 }
+
+/// mana CI smoke target; never merged.
+pub fn mana_smoke() -> u32 {
+    1
+}

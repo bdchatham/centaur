@@ -32,6 +32,7 @@ A pain to solve: clients of the api-rs workflow-runs API (`GET /api/workflows/ru
 - `started_at` is the first time any attempt began executing, so a retried run keeps its original start; `null` while the run has never been claimed.
 - `WorkflowRun` keeps its fields, so every existing `WorkflowRun { .. }` literal compiles unchanged. The timestamps ride on a new response type that `#[serde(flatten)]`s `WorkflowRun` and adds `started_at`/`completed_at`; the list and get routes return that type.
 - No existing test is edited. Proof is by new Rust tests in new files under the `tests/` directory of each touched `services/api-rs` crate; database-backed tests skip without a database URL.
+- Each proof must compile before the change and fail only because the fields are missing, so new tests call only existing items (`WorkflowRuntime::list_runs`/`get_run`, the two routes via `build_router_with_session_and_workflow_runtime`) and assert on their serialized JSON. The new response type is never tested in isolation.
 
 ## Non-goals
 

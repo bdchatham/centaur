@@ -1,12 +1,4 @@
 - id: "1"
-  title: Add a response type carrying started_at and completed_at
+  title: Expose started_at and completed_at on workflow runs from list_runs, get_run, and the HTTP routes
   description: >-
-    Add a new response type in centaur-workflows that `#[serde(flatten)]`s `WorkflowRun` and adds nullable `started_at` and `completed_at`, serialized as RFC 3339 or explicit `null`, leaving `WorkflowRun` and its existing literals and tests untouched (CAP-1, CAP-2). Prove it with a new test file under `services/api-rs/crates/centaur-workflows/tests/` asserting the flattened existing fields, RFC 3339 strings when set, and keys present as `null` when unset.
-- id: "2"
-  title: Populate the timestamps from Absurd state for all queues
-  description: >-
-    Select the run and task timestamp columns in the list and get queries and have `list_runs` and `get_run` return the new response type for all four workflow queues, without changing what `cancel_run` needs (CAP-1, CAP-2, CAP-3). Prove it with a new database-backed test file under `services/api-rs/crates/centaur-workflows/tests/` covering pending, running, completed, failed, cancelled, and retried runs.
-- id: "3"
-  title: Return the timestamps from the list and get endpoints
-  description: >-
-    Verify `GET /api/workflows/runs` and `GET /api/workflows/runs/{run_id}` return `started_at` and `completed_at` on every run with identical values for the same run and no change to existing fields (CAP-3). Prove it with a new test file under `services/api-rs/crates/centaur-api-server/tests/` covering both routes and the `null`-until-set behavior.
+    Add a response type that `#[serde(flatten)]`s `WorkflowRun` plus nullable `started_at`/`completed_at`, populate it from the Absurd run and task timestamp columns for all four queues in the list and get queries, and have `list_runs` and `get_run` return it (CAP-1, CAP-2, CAP-3). Prove it with new test files in `centaur-workflows/tests/` and `centaur-api-server/tests/` that serialize the existing `list_runs`/`get_run` output and call `GET /api/workflows/runs` and `/{run_id}`, asserting keys present, RFC 3339 or `null`, and equal values across list and get for pending, running, completed, failed, cancelled, and retried runs.

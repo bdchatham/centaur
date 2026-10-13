@@ -5752,3 +5752,6 @@ mod tests {
 pub fn mana_smoke() -> u32 {
     1
 }
+
+#[cfg(test)]
+mod mana_smoke_tests;

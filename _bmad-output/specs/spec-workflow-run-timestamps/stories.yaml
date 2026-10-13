@@ -5,7 +5,7 @@
 - id: "2"
   title: Populate the timestamps from Absurd run data
   description: >-
-    Select the stored Absurd start and completion timestamps in the list and get queries and map them in `workflow_run_from_row` per CAP-2, leaving `updated_at` unchanged. Rust tests prove queued, running and completed runs map to null/null, set/null and set/set, with the retry and failed/cancelled semantics taken from the SPEC's resolved open questions.
+    Select the stored Absurd start and completion timestamps in the list and get queries and map them in `workflow_run_from_row` per CAP-2, leaving `updated_at` unchanged. Rust tests prove queued, running and completed runs map to null/null, set/null and set/set, with the retry and failed/cancelled semantics chosen per the SPEC's open questions (first vs latest attempt for started_at; failed/cancelled completed_at).
 - id: "3"
   title: Expose the fields on list and get run endpoints
   description: >-

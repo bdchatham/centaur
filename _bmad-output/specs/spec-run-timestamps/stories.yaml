@@ -1,0 +1,4 @@
+- id: "1"
+  title: Expose started_at and completed_at on workflow runs from list_runs, get_run, and the HTTP routes
+  description: >-
+    Add a response type that `#[serde(flatten)]`s `WorkflowRun` plus nullable `started_at`/`completed_at`, populate it from the Absurd run and task timestamp columns for all four queues in the list and get queries, and have `list_runs` and `get_run` return it (CAP-1, CAP-2, CAP-3). Prove it with new test files in `centaur-workflows/tests/` and `centaur-api-server/tests/` that serialize the existing `list_runs`/`get_run` output and call `GET /api/workflows/runs` and `/{run_id}`, asserting keys present, RFC 3339 or `null`, and equal values across list and get for pending, running, completed, failed, cancelled, and retried runs.

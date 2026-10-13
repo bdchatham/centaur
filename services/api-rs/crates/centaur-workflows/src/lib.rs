@@ -391,6 +391,16 @@ pub struct WorkflowRun {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct WorkflowRunWithTimestamps {
+    #[serde(flatten)]
+    pub run: WorkflowRun,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub started_at: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub completed_at: Option<OffsetDateTime>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RegisteredWorkflowWebhook {
     pub workflow_name: String,
     pub source_path: String,
@@ -918,7 +928,7 @@ impl WorkflowRuntime {
         &self,
         limit: i64,
         workflow_name: Option<&str>,
-    ) -> Result<Vec<WorkflowRun>, WorkflowRuntimeError> {
+    ) -> Result<Vec<WorkflowRunWithTimestamps>, WorkflowRuntimeError> {
         let limit = list_runs_limit(limit);
         let mut runs = Vec::new();
         runs.extend(
@@ -938,9 +948,10 @@ impl WorkflowRuntime {
                 .await?,
         );
         runs.sort_by(|a, b| {
-            b.created_at
-                .cmp(&a.created_at)
-                .then(b.task_id.cmp(&a.task_id))
+            b.run
+                .created_at
+                .cmp(&a.run.created_at)
+                .then(b.run.task_id.cmp(&a.run.task_id))
         });
         runs.truncate(limit as usize);
         Ok(runs)
@@ -951,7 +962,7 @@ impl WorkflowRuntime {
         queue_name: &str,
         limit: i64,
         workflow_name: Option<&str>,
-    ) -> Result<Vec<WorkflowRun>, WorkflowRuntimeError> {
+    ) -> Result<Vec<WorkflowRunWithTimestamps>, WorkflowRuntimeError> {
         let (task_table, run_table) = absurd_queue_tables(queue_name)?;
         let rows = sqlx::query(&format!(
             r#"
@@ -972,7 +983,13 @@ impl WorkflowRuntime {
                 t.completed_payload,
                 r.failure_reason,
                 t.enqueue_at as created_at,
-                greatest(t.enqueue_at, coalesce(r.available_at, t.enqueue_at)) as updated_at
+                greatest(t.enqueue_at, coalesce(r.available_at, t.enqueue_at)) as updated_at,
+                t.first_started_at as started_at,
+                case t.state
+                    when 'completed' then r.completed_at
+                    when 'failed' then r.failed_at
+                    when 'cancelled' then t.cancelled_at
+                end as completed_at
             from {task_table} t
             join {run_table} r on r.run_id = t.last_attempt_run
             where (
@@ -991,7 +1008,10 @@ impl WorkflowRuntime {
         rows.into_iter().map(workflow_run_from_row).collect()
     }
 
-    pub async fn get_run(&self, run_id: &str) -> Result<WorkflowRun, WorkflowRuntimeError> {
+    pub async fn get_run(
+        &self,
+        run_id: &str,
+    ) -> Result<WorkflowRunWithTimestamps, WorkflowRuntimeError> {
         for queue_name in [
             WORKFLOW_QUEUE,
             WORKFLOW_SLACK_LIVE_QUEUE,
@@ -1009,7 +1029,7 @@ impl WorkflowRuntime {
         &self,
         queue_name: &str,
         run_id: &str,
-    ) -> Result<Option<WorkflowRun>, WorkflowRuntimeError> {
+    ) -> Result<Option<WorkflowRunWithTimestamps>, WorkflowRuntimeError> {
         let (task_table, run_table) = absurd_queue_tables(queue_name)?;
         let row = sqlx::query(&format!(
             r#"
@@ -1030,7 +1050,13 @@ impl WorkflowRuntime {
                 t.completed_payload,
                 r.failure_reason,
                 t.enqueue_at as created_at,
-                greatest(t.enqueue_at, coalesce(r.available_at, t.enqueue_at)) as updated_at
+                greatest(t.enqueue_at, coalesce(r.available_at, t.enqueue_at)) as updated_at,
+                t.first_started_at as started_at,
+                case t.state
+                    when 'completed' then r.completed_at
+                    when 'failed' then r.failed_at
+                    when 'cancelled' then t.cancelled_at
+                end as completed_at
             from {run_table} r
             join {task_table} t on t.task_id = r.task_id
             where r.run_id = $1::uuid
@@ -1050,7 +1076,7 @@ impl WorkflowRuntime {
             (WORKFLOW_ETL_BACKFILL_QUEUE, &self.inner.etl_backfill_client),
         ] {
             if let Some(run) = self.get_run_for_queue(queue_name, run_id).await? {
-                client.cancel_task(&run.task_id, None).await?;
+                client.cancel_task(&run.run.task_id, None).await?;
                 return Ok(());
             }
         }
@@ -4583,7 +4609,9 @@ fn non_empty_text(value: Option<&Value>) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
-fn workflow_run_from_row(row: sqlx::postgres::PgRow) -> Result<WorkflowRun, WorkflowRuntimeError> {
+fn workflow_run_from_row(
+    row: sqlx::postgres::PgRow,
+) -> Result<WorkflowRunWithTimestamps, WorkflowRuntimeError> {
     let params: Value = row.try_get("params")?;
     let input = params.get("input").cloned().unwrap_or(Value::Null);
     let workflow_name = params
@@ -4591,18 +4619,22 @@ fn workflow_run_from_row(row: sqlx::postgres::PgRow) -> Result<WorkflowRun, Work
         .and_then(Value::as_str)
         .unwrap_or(WORKFLOW_TASK)
         .to_owned();
-    Ok(WorkflowRun {
-        run_id: row.try_get("run_id")?,
-        initial_run_id: row.try_get("initial_run_id")?,
-        task_id: row.try_get("task_id")?,
-        workflow_name,
-        status: row.try_get("state")?,
-        input,
-        result: row.try_get("completed_payload")?,
-        failure: row.try_get("failure_reason")?,
-        attempts: row.try_get("attempts")?,
-        created_at: row.try_get("created_at")?,
-        updated_at: row.try_get("updated_at")?,
+    Ok(WorkflowRunWithTimestamps {
+        run: WorkflowRun {
+            run_id: row.try_get("run_id")?,
+            initial_run_id: row.try_get("initial_run_id")?,
+            task_id: row.try_get("task_id")?,
+            workflow_name,
+            status: row.try_get("state")?,
+            input,
+            result: row.try_get("completed_payload")?,
+            failure: row.try_get("failure_reason")?,
+            attempts: row.try_get("attempts")?,
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
+        },
+        started_at: row.try_get("started_at")?,
+        completed_at: row.try_get("completed_at")?,
     })
 }
 

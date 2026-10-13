@@ -1,0 +1,12 @@
+- id: "1"
+  title: Add nullable started_at and completed_at to WorkflowRun
+  description: >-
+    Add `started_at` and `completed_at` as optional RFC3339 timestamps on the `WorkflowRun` struct in centaur-workflows, serialized as keys that are always present (null when unset), per CAP-1. A Rust unit test extends the existing timestamp serialization test to cover both the set and null forms.
+- id: "2"
+  title: Populate the timestamps from Absurd run data
+  description: >-
+    Select the stored Absurd start and completion timestamps in the list and get queries and map them in `workflow_run_from_row` per CAP-2, leaving `updated_at` unchanged. Rust tests prove queued, running and completed runs map to null/null, set/null and set/set, with the retry and failed/cancelled semantics taken from the SPEC's resolved open questions.
+- id: "3"
+  title: Expose the fields on list and get run endpoints
+  description: >-
+    Ensure `GET /api/workflows/runs` and `GET /api/workflows/runs/{run_id}` return both fields for runs from all four workflow queues per CAP-3, without changing the response envelopes. A Rust test at the runtime or route level asserts the keys are present in both responses.

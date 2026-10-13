@@ -1,3 +1,3 @@
-# Spec smoke-a, revision 1
+# Spec smoke-a, revision 2
 
-Throwaway spec for the bridge smoke.
+Revised after the change request.

@@ -1,0 +1,8 @@
+- id: "1"
+  title: Add crate version to the healthz response
+  description: >-
+    Add a top-level string `version` set from `env!("CARGO_PKG_VERSION")` to the JSON built by `healthz()` in `centaur-api-server/src/routes.rs` (CAP-1). Prove it with a Rust test that decodes the `/healthz` body and compares `version` to the crate version.
+- id: "2"
+  title: Pin healthz compatibility with and without a bearer token
+  description: >-
+    Add a Rust test asserting `version` appears alongside `ok: true` both with no `Authorization` header and with a bearer JWT that also yields `slack_client_jwt` (CAP-2). Confirm the existing healthz tests still pass unmodified and `/healthz` still returns 200 while the runtime is unready.

@@ -1,0 +1,4 @@
+- id: "1"
+  title: Report last real change as updated_at for sleeping runs
+  description: >-
+    Change `updated_at` in the list and get queries in `centaur-workflows` (all four queues) so a run in state `sleeping` reports `greatest(enqueue_at, coalesce(started_at, created_at))` instead of its wake or retry time, leaving other states untouched (CAP-1, CAP-2, CAP-3). Prove it with a new test file in `centaur-api-server/tests/` that seeds sleeping runs with a far-future finite `available_at` (sleep or timed wait, and retry backoff) beside pending and completed runs and asserts `list_runs`, `get_run`, and both routes return the expected `updated_at`.

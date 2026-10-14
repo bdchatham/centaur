@@ -30,9 +30,9 @@ A pain to solve: clients of the api-rs workflow-runs API (`GET /api/workflows/ru
 - The new fields are always serialized, as `null` when unset (never omitted), in RFC 3339 like `created_at`.
 - Values come from durable Absurd task/run state in Postgres (columns `first_started_at`, `started_at`, `completed_at`, `failed_at`, `cancelled_at` already exist); no process-local source of truth, and no migration unless those columns prove insufficient.
 - `started_at` is the first time any attempt began executing, so a retried run keeps its original start; `null` while the run has never been claimed.
-- `WorkflowRun` keeps its fields, so every existing `WorkflowRun { .. }` literal compiles unchanged. The timestamps ride on a new response type that `#[serde(flatten)]`s `WorkflowRun` and adds `started_at`/`completed_at`; the list and get routes return that type.
-- No existing test is edited. Proof is by new Rust tests in new files under the `tests/` directory of each touched `services/api-rs` crate; database-backed tests skip without a database URL.
-- Each proof must compile before the change and fail only because the fields are missing, so new tests call only existing items (`WorkflowRuntime::list_runs`/`get_run`, the two routes via `build_router_with_session_and_workflow_runtime`) and assert on their serialized JSON. The new response type is never tested in isolation.
+- `started_at` and `completed_at` are fields on `WorkflowRun` itself (no wrapper or response type); `list_runs`, `get_run`, and both routes keep returning it. Existing tests may be edited where this needs it (e.g. the `WorkflowRun` literal in `workflow_run_timestamps_serialize_as_rfc3339`); the CI oracle flags such edits for human review.
+- Proof is by new Rust tests in new files under the `tests/` directory of each touched `services/api-rs` crate; database-backed tests skip without a database URL.
+- Each new test must compile before the change and fail only because the fields are missing, so it calls only existing items (`WorkflowRuntime::list_runs`/`get_run`, the two routes via `build_router_with_session_and_workflow_runtime`) and asserts on their serialized JSON.
 
 ## Non-goals
 

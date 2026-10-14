@@ -1,0 +1,4 @@
+- id: "1"
+  title: List and get workflow runs that wait on an event with no timeout
+  description: >-
+    Change `updated_at` in the list and get queries in `centaur-workflows` (all four queues) so a run whose `available_at` is non-finite reports the later of `enqueue_at` and the attempt's `started_at`/`created_at`, leaving finite values untouched (CAP-1, CAP-2, CAP-3). Prove it with a new test file in `centaur-api-server/tests/` that seeds a sleeping run with `available_at = 'infinity'` next to other runs and asserts `list_runs`, `get_run`, and both routes return 200 with the expected finite `updated_at`.

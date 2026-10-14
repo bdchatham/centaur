@@ -450,12 +450,23 @@ fn assert_timestamp(run: &Value, key: &str, expected: Option<&str>, context: &st
 }
 
 async fn assert_scenario(scenario: Scenario) {
+    assert_scenarios(vec![scenario]).await;
+}
+
+async fn assert_scenarios(scenarios: Vec<Scenario>) {
     let Some(url) = database_url() else {
         eprintln!("skipping run timestamp tests: set SESSION_SQLX_TEST_DATABASE_URL");
         return;
     };
     let _serial = SETUP_LOCK.lock().await;
     let harness = harness(&url).await;
+    for scenario in scenarios {
+        assert_scenario_on(&harness, scenario).await;
+    }
+    harness.pool.close().await;
+}
+
+async fn assert_scenario_on(harness: &Harness, scenario: Scenario) {
     let (workflow_name, run_id) = seed(&harness.pool, &scenario).await;
     let context = format!("{} {:?}", scenario.queue, scenario.task_state);
 
@@ -561,6 +572,7 @@ async fn run_timestamps_retry_completed_keeps_first_start_and_final_completion()
 
 #[tokio::test]
 async fn run_timestamps_agree_across_list_and_get_for_all_four_queues() {
+    let mut scenarios = Vec::new();
     for queue in [
         WORKFLOW_QUEUE,
         WORKFLOW_SLACK_LIVE_QUEUE,
@@ -574,7 +586,8 @@ async fn run_timestamps_agree_across_list_and_get_for_all_four_queues() {
             failed(),
             cancelled_after_start(),
         ] {
-            assert_scenario(Scenario { queue, ..scenario }).await;
+            scenarios.push(Scenario { queue, ..scenario });
         }
     }
+    assert_scenarios(scenarios).await;
 }

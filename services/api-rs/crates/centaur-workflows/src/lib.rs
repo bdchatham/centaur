@@ -388,6 +388,10 @@ pub struct WorkflowRun {
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub started_at: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub completed_at: Option<OffsetDateTime>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -972,7 +976,12 @@ impl WorkflowRuntime {
                 t.completed_payload,
                 r.failure_reason,
                 t.enqueue_at as created_at,
-                greatest(t.enqueue_at, coalesce(r.available_at, t.enqueue_at)) as updated_at
+                greatest(t.enqueue_at, coalesce(r.available_at, t.enqueue_at)) as updated_at,
+                t.first_started_at as started_at,
+                case
+                    when t.state in ('completed', 'failed', 'cancelled')
+                        then coalesce(r.completed_at, r.failed_at, t.cancelled_at)
+                end as completed_at
             from {task_table} t
             join {run_table} r on r.run_id = t.last_attempt_run
             where (
@@ -1030,7 +1039,12 @@ impl WorkflowRuntime {
                 t.completed_payload,
                 r.failure_reason,
                 t.enqueue_at as created_at,
-                greatest(t.enqueue_at, coalesce(r.available_at, t.enqueue_at)) as updated_at
+                greatest(t.enqueue_at, coalesce(r.available_at, t.enqueue_at)) as updated_at,
+                t.first_started_at as started_at,
+                case
+                    when t.state in ('completed', 'failed', 'cancelled')
+                        then coalesce(r.completed_at, r.failed_at, t.cancelled_at)
+                end as completed_at
             from {run_table} r
             join {task_table} t on t.task_id = r.task_id
             where r.run_id = $1::uuid
@@ -4603,6 +4617,8 @@ fn workflow_run_from_row(row: sqlx::postgres::PgRow) -> Result<WorkflowRun, Work
         attempts: row.try_get("attempts")?,
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,
+        started_at: row.try_get("started_at")?,
+        completed_at: row.try_get("completed_at")?,
     })
 }
 
@@ -5218,6 +5234,8 @@ mod tests {
             attempts: 1,
             created_at: at,
             updated_at: at,
+            started_at: None,
+            completed_at: None,
         };
         let value = serde_json::to_value(run).unwrap();
         assert_eq!(value["initial_run_id"], json!("initial-run"));

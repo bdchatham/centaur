@@ -976,7 +976,14 @@ impl WorkflowRuntime {
                 t.completed_payload,
                 r.failure_reason,
                 t.enqueue_at as created_at,
-                greatest(t.enqueue_at, coalesce(r.available_at, t.enqueue_at)) as updated_at,
+                greatest(
+                    t.enqueue_at,
+                    case
+                        when r.available_at is not null and not isfinite(r.available_at)
+                            then coalesce(r.started_at, r.created_at)
+                        else coalesce(r.available_at, t.enqueue_at)
+                    end
+                ) as updated_at,
                 t.first_started_at as started_at,
                 case
                     when t.state in ('completed', 'failed', 'cancelled')
@@ -1039,7 +1046,14 @@ impl WorkflowRuntime {
                 t.completed_payload,
                 r.failure_reason,
                 t.enqueue_at as created_at,
-                greatest(t.enqueue_at, coalesce(r.available_at, t.enqueue_at)) as updated_at,
+                greatest(
+                    t.enqueue_at,
+                    case
+                        when r.available_at is not null and not isfinite(r.available_at)
+                            then coalesce(r.started_at, r.created_at)
+                        else coalesce(r.available_at, t.enqueue_at)
+                    end
+                ) as updated_at,
                 t.first_started_at as started_at,
                 case
                     when t.state in ('completed', 'failed', 'cancelled')

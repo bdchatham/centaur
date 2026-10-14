@@ -979,7 +979,8 @@ impl WorkflowRuntime {
                 greatest(
                     t.enqueue_at,
                     case
-                        when r.available_at is not null and not isfinite(r.available_at)
+                        when t.state = 'sleeping'
+                            or (r.available_at is not null and not isfinite(r.available_at))
                             then coalesce(r.started_at, r.created_at)
                         else coalesce(r.available_at, t.enqueue_at)
                     end
@@ -1049,7 +1050,8 @@ impl WorkflowRuntime {
                 greatest(
                     t.enqueue_at,
                     case
-                        when r.available_at is not null and not isfinite(r.available_at)
+                        when t.state = 'sleeping'
+                            or (r.available_at is not null and not isfinite(r.available_at))
                             then coalesce(r.started_at, r.created_at)
                         else coalesce(r.available_at, t.enqueue_at)
                     end

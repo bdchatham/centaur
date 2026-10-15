@@ -984,6 +984,8 @@ impl WorkflowRuntime {
                         when t.state = 'sleeping'
                             or (r.available_at is not null and not isfinite(r.available_at))
                             then coalesce(r.started_at, r.created_at)
+                        when t.state = 'pending' and r.available_at > now()
+                            then r.created_at
                         else coalesce(r.available_at, t.enqueue_at)
                     end
                 ) as updated_at,
@@ -1057,6 +1059,8 @@ impl WorkflowRuntime {
                         when t.state = 'sleeping'
                             or (r.available_at is not null and not isfinite(r.available_at))
                             then coalesce(r.started_at, r.created_at)
+                        when t.state = 'pending' and r.available_at > now()
+                            then r.created_at
                         else coalesce(r.available_at, t.enqueue_at)
                     end
                 ) as updated_at,

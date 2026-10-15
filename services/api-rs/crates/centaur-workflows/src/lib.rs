@@ -979,8 +979,8 @@ impl WorkflowRuntime {
                 greatest(
                     t.enqueue_at,
                     case
-                        when t.state in ('completed', 'failed')
-                            then coalesce(r.completed_at, r.failed_at)
+                        when t.state in ('completed', 'failed', 'cancelled')
+                            then coalesce(r.completed_at, r.failed_at, t.cancelled_at)
                         when t.state = 'sleeping'
                             or (r.available_at is not null and not isfinite(r.available_at))
                             then coalesce(r.started_at, r.created_at)
@@ -1052,8 +1052,8 @@ impl WorkflowRuntime {
                 greatest(
                     t.enqueue_at,
                     case
-                        when t.state in ('completed', 'failed')
-                            then coalesce(r.completed_at, r.failed_at)
+                        when t.state in ('completed', 'failed', 'cancelled')
+                            then coalesce(r.completed_at, r.failed_at, t.cancelled_at)
                         when t.state = 'sleeping'
                             or (r.available_at is not null and not isfinite(r.available_at))
                             then coalesce(r.started_at, r.created_at)

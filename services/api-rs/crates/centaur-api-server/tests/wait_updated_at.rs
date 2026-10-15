@@ -211,7 +211,7 @@ fn pending_run() -> Run {
         started_at: None,
         completed_at: None,
         created_at: ENQUEUED,
-        expect_updated_at: FAR_FUTURE,
+        expect_updated_at: ENQUEUED,
     }
 }
 

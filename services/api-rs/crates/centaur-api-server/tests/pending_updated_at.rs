@@ -301,7 +301,16 @@ fn cancelled_while_sleeping() -> Run {
     }
 }
 
-/// Seeds one task whose last attempt is `run`; returns the run id.
+/// A pending attempt whose `available_at` is not in the future is claimable:
+/// the runtime's live workers would flip it to running mid-read.
+fn claimable(run: &Run) -> bool {
+    run.state == "pending"
+        && OffsetDateTime::parse(run.available_at, &Rfc3339).unwrap() <= OffsetDateTime::now_utc()
+}
+
+/// Seeds one task whose last attempt is `run`; returns the run id. A claimable
+/// attempt is seeded with a far-future `available_at`; `assert_runs` sets the
+/// real one once it holds the task rows locked against the workers.
 async fn seed(pool: &sqlx::PgPool, queue: &str, workflow_name: &str, run: &Run) -> String {
     let task_id: String = sqlx::query_scalar("select gen_random_uuid()::text")
         .fetch_one(pool)
@@ -364,7 +373,11 @@ async fn seed(pool: &sqlx::PgPool, queue: &str, workflow_name: &str, run: &Run) 
     .bind(&task_id)
     .bind(run.attempt)
     .bind(run.state)
-    .bind(run.available_at)
+    .bind(if claimable(run) {
+        START_FAR_FUTURE
+    } else {
+        run.available_at
+    })
     .bind(attempt_started_at)
     .bind(run.completed_at)
     .bind(run.failed_at)
@@ -421,6 +434,33 @@ async fn assert_runs(queue: &'static str, runs: Vec<Run>) {
     let mut seeded = Vec::new();
     for run in &runs {
         seeded.push((seed(&harness.pool, queue, &workflow_name, run).await, run));
+    }
+    // Workers claim with `for update skip locked` over the attempt and task
+    // rows, so holding the task rows locked keeps claimable runs pending while
+    // plain reads still see them. `no key update` lets the attempt rows'
+    // foreign key checks through.
+    let mut hold = harness.pool.begin().await.expect("begin lock transaction");
+    sqlx::query(&format!(
+        "select task_id from absurd.t_{queue}
+          where params->>'workflow_name' = $1
+          for no key update"
+    ))
+    .bind(&workflow_name)
+    .fetch_all(&mut *hold)
+    .await
+    .expect("lock seeded tasks");
+    for (run_id, run) in &seeded {
+        if claimable(run) {
+            sqlx::query(&format!(
+                "update absurd.r_{queue} set available_at = $2::timestamptz
+                  where run_id = $1::uuid"
+            ))
+            .bind(run_id)
+            .bind(run.available_at)
+            .execute(&harness.pool)
+            .await
+            .expect("set claimable available_at");
+        }
     }
 
     let listed = harness
@@ -486,6 +526,7 @@ async fn assert_runs(queue: &'static str, runs: Vec<Run>) {
             );
         }
     }
+    hold.rollback().await.expect("release task locks");
     harness.pool.close().await;
 }
 

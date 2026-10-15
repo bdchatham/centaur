@@ -1,0 +1,12 @@
+- id: "1"
+  title: Report finish time as updated_at for completed and failed runs
+  description: >-
+    Make `list_runs` and `get_run` return the last attempt's `completed_at` (completed) or `failed_at` (failed), floored at `enqueue_at`, as `updated_at` in both duplicated SQL queries (CAP-1, CAP-4). Prove it with a new test file in `centaur-api-server/tests/` seeding completed and failed runs on all four queues and asserting equal `updated_at` from list, get, and both routes; update the `completed_run` expectation in `sleeping_updated_at.rs` and `wait_updated_at.rs` from `enqueue_at` to the completion time, which the oracle flags for review.
+- id: "2"
+  title: Report cancellation time as updated_at for cancelled runs
+  description: >-
+    Make cancelled runs return the task's `cancelled_at`, floored at `enqueue_at`, as `updated_at`, so a run cancelled while sleeping no longer shows its future wake time (CAP-2, CAP-4). Prove it with a new test file in `centaur-api-server/tests/` seeding runs cancelled before start, mid-attempt, and while sleeping with a far-future `available_at`, asserting `updated_at` equals the cancellation time from list, get, and both routes.
+- id: "3"
+  title: Never report a future updated_at for pending runs
+  description: >-
+    For a pending run whose `available_at` is in the future, return the later of `enqueue_at` and the attempt row's `created_at` as `updated_at`, keeping `available_at` when it is not in the future (CAP-3, CAP-4). Prove it with a new test file in `centaur-api-server/tests/` seeding pending runs with past and far-future `available_at` plus an all-states sweep asserting no `updated_at` exceeds the present; update the `pending_run` expectation in `sleeping_updated_at.rs` and `wait_updated_at.rs` from the future time, which the oracle flags for review.

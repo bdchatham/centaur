@@ -224,8 +224,8 @@ fn completed_run() -> Run {
         started_at: Some(STARTED),
         completed_at: Some(COMPLETED),
         created_at: ENQUEUED,
-        // `available_at` defaults to the creation time, so updated_at is enqueue_at.
-        expect_updated_at: ENQUEUED,
+        // A finished run reports its completion time.
+        expect_updated_at: COMPLETED,
     }
 }
 

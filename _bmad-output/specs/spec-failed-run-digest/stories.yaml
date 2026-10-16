@@ -1,0 +1,10 @@
+- id: "1"
+  title: Serve GET /api/workflows/runs/failed-digest with failed runs as summaries
+  description: >-
+    Add the route and its `WorkflowsRead` entry in `route_access`, returning `{"ok": true, "runs": [...]}` with only failed runs from all four queues, newest first, at most 20 by default, each entry the run summary from the summary spec unchanged (CAP-1, CAP-3). Prove it with a new `centaur-api-server/tests/failed_digest_http.rs` that only issues HTTP requests: DB-backed tests (skipped without a database URL) seed failed and non-failed runs over all four queues and assert the digest holds only failed runs in newest-first order, returns a failed run behind more than 20 newer live runs, returns at most 20 of 25 failed runs, and that each entry equals the body's summary from `GET /api/workflows/runs/{run_id}/summary`, including `last_error`.
+  spec_checkpoint: true
+- id: "2"
+  title: Honor limit on the failed-run digest with a cap of 100
+  description: >-
+    Accept `?limit=N` on the digest, returning at most N failed runs newest first and clamping any N above 100 to 100, applied in SQL per queue before truncation (CAP-2). Prove it with a new `centaur-api-server/tests/failed_digest_limit_http.rs` that only issues HTTP requests: DB-backed tests (skipped without a database URL) seed 150 failed runs and assert `?limit=5` returns the 5 newest, `?limit=100` and `?limit=1000` each return 100, and omitting `limit` still returns 20.
+  spec_checkpoint: true

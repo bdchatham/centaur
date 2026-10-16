@@ -284,8 +284,7 @@ async fn seed(
             (run_id, task_id, attempt, state, claimed_by, claim_expires_at, available_at,
              started_at, completed_at, failed_at, result, failure_reason, created_at)
          values ($1::uuid, $2::uuid, 1, $3, $4, $5::timestamptz,
-                 case when $3 = 'pending' then $5::timestamptz
-                      else now() - make_interval(mins => $6) end,
+                 now() - make_interval(mins => $6),
                  case when $7 then now() - make_interval(mins => $6) end,
                  case when $3 in ('completed', 'cancelled') then now() end,
                  case when $3 = 'failed' then now() end,

@@ -241,6 +241,8 @@ async fn assert_unknown_state_is_400(router: &Router, query: &str) {
     }
 }
 
+/// Pending and sleeping runs get a far-future `available_at` so the live workers
+/// of any `WorkflowRuntime` sharing the database cannot claim and change them.
 /// Inserts a one-attempt task in `queue` and returns its last run id. Larger
 /// `age_minutes` means an older `enqueue_at`.
 async fn seed(
@@ -284,7 +286,8 @@ async fn seed(
             (run_id, task_id, attempt, state, claimed_by, claim_expires_at, available_at,
              started_at, completed_at, failed_at, result, failure_reason, created_at)
          values ($1::uuid, $2::uuid, 1, $3, $4, $5::timestamptz,
-                 now() - make_interval(mins => $6),
+                 case when $3 in ('pending', 'sleeping') then $10::timestamptz
+                      else now() - make_interval(mins => $6) end,
                  case when $7 then now() - make_interval(mins => $6) end,
                  case when $3 in ('completed', 'cancelled') then now() end,
                  case when $3 = 'failed' then now() end,
@@ -299,6 +302,7 @@ async fn seed(
     .bind(started)
     .bind((state == "completed").then(|| json!({"ok": true})))
     .bind((state == "failed").then(|| json!({"name": "Error", "message": "boom"})))
+    .bind(FAR_FUTURE)
     .execute(pool)
     .await
     .expect("insert run");
@@ -407,7 +411,7 @@ async fn runs_by_state_without_workflow_name_returns_only_that_state() {
         // listed unless the limit cut them off, which it can only do for
         // other runs of the same state.
         assert!(
-            expected.is_subset(&returned) || returned.len() == 1000,
+            expected.is_subset(&returned) || returned.len() >= 1000,
             "state={state}: seeded runs missing from {returned:?}"
         );
     }

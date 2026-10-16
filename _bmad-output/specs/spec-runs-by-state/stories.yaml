@@ -1,0 +1,12 @@
+- id: "1"
+  title: Add WorkflowRunState with parsing and the valid-state message
+  description: >-
+    Add a public `WorkflowRunState` enum to `centaur-workflows` for the six Absurd states, with `FromStr`, `as_str` matching `WorkflowRun.status`, an `ALL` list, and a parse error that names every valid state (CAP-3, state constraint). Prove it with a new `centaur-workflows/tests/run_state.rs` that round-trips each state, rejects unknown, empty and wrongly cased input, and asserts the error text contains all six names; no database needed.
+- id: "2"
+  title: Filter list_runs by state in SQL across all four queues
+  description: >-
+    Give `WorkflowRuntime::list_runs` a third `Option<WorkflowRunState>` parameter applied in `list_runs_for_queue`'s SQL before `limit`, and update the eight existing `list_runs(100, Some(..))` call sites in `centaur-api-server/tests` to pass `None` (edits the oracle flags). Prove it with a new `centaur-api-server/tests/runs_by_state.rs` that seeds runs in all six states over several queues and asserts each state returns exactly its runs, combines with `workflow_name`, and still returns a live run behind more than `limit` newer finished runs (CAP-1, CAP-2); it skips without a database URL.
+- id: "3"
+  title: Accept ?state= on GET /api/workflows/runs with a 400 for unknown states
+  description: >-
+    Add `state: Option<String>` to `ListWorkflowRunsQuery`, parse it in `list_workflow_runs` before the runtime lookup (unknown state becomes `ApiError::BadRequest` naming the valid states), and pass it to `list_runs` (CAP-1, CAP-2, CAP-3). Prove it with a new `centaur-api-server/tests/runs_by_state_http.rs` that, without a database, asserts `?state=bogus` returns 400 naming all six states, and with a database asserts `?state=X` combined with `limit` and `workflow_name` returns the matching runs and that omitting `state` is unchanged.

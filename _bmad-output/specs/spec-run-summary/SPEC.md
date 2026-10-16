@@ -10,31 +10,35 @@ sources: []
 
 ## Why
 
-An opportunity to capture: clients of the api-rs workflow-runs API that only need a run's headline (which workflow, what status, how many attempts, when created and last changed) must fetch `GET /api/workflows/runs/{run_id}` and receive the whole run, including input, result and failure payloads. A small per-run summary endpoint serves them without that bulk.
+An opportunity to capture: clients of the api-rs workflow-runs API that only need a run's headline (which workflow, what status, how many attempts, when created and last changed) must fetch `GET /api/workflows/runs/{run_id}` and receive the whole run, including input, result and failure payloads. A small per-run summary endpoint serves them without that bulk. It also names why a failed run failed (`last_error`), so a consumer such as a failed-run digest can show the reason without the raw failure payload.
 
 ## Capabilities
 
 - **CAP-1**
   - **intent:** A client can fetch a small summary of one workflow run.
-  - **success:** `GET /api/workflows/runs/{run_id}/summary` for an existing run returns 200 with a summary object holding exactly `run_id`, `workflow_name`, `status`, `attempts`, `created_at` and `updated_at`.
+  - **success:** `GET /api/workflows/runs/{run_id}/summary` for an existing run returns 200 with a summary object holding exactly `run_id`, `workflow_name`, `status`, `attempts`, `created_at`, `updated_at` and `last_error`.
 - **CAP-2**
   - **intent:** The summary tells the same story as the full run.
-  - **success:** For the same run, each summary field equals the same field of `GET /api/workflows/runs/{run_id}`, for runs from all four queues (workflow, slack-live, etl, etl-backfill) and in every run state.
+  - **success:** For the same run, `run_id`, `workflow_name`, `status`, `attempts`, `created_at` and `updated_at` equal the same fields of `GET /api/workflows/runs/{run_id}`, and `last_error` equals the CAP-4 rule applied to that response's `status` and `failure`, for runs from all four queues (workflow, slack-live, etl, etl-backfill) and in every run state.
 - **CAP-3**
   - **intent:** A client learns that a run does not exist.
   - **success:** `GET /api/workflows/runs/{run_id}/summary` for an unknown run returns 404 with the same error body as the full run endpoint.
+- **CAP-4**
+  - **intent:** A client can tell why a failed run failed without fetching the raw failure payload.
+  - **success:** `last_error` is a string for a run whose `status` is `failed` and a stored failure payload exists, and `null` for every other run, including a non-failed run that still has a failure payload stored. The string is the payload's string `message` member; if the payload is a bare JSON string, that string; otherwise the payload's compact JSON text. A failed run with no stored payload has `last_error` `null`.
 
 ## Constraints
 
 - Additive only: existing routes, `WorkflowRun`, and the list and get responses keep their shape and semantics.
-- Summary values are identical to the full run's (same `status` string, same `updated_at` derivation, RFC 3339 like `created_at`); they are not re-derived separately. The summary carries none of `input`, `result`, `failure`, task ids, `started_at` or `completed_at`.
+- Summary values are identical to the full run's (same `status` string, same `updated_at` derivation, RFC 3339 like `created_at`); they are not re-derived separately. The summary carries none of `input`, `result`, `failure`, task ids, `started_at` or `completed_at`; `last_error` is its only failure-derived field and is a single string, never the raw payload. `last_error` derives from the full run's `status` and `failure`, not from a separate query.
 - The new route needs a `route_access` entry mapped to `Capability::WorkflowsRead`, like the sibling GET run routes; without one every caller gets 403.
 - Values come from durable Absurd state in Postgres; no process-local source of truth and no migration.
 - Proof is by new Rust test files under `services/api-rs/crates/centaur-api-server/tests/`. Each test compiles before the change and fails because the route is missing, so it uses only existing items (`build_router_with_session_and_workflow_runtime`, a console token, direct seeding of the Absurd queue tables) and asserts on HTTP status and JSON. Database-backed tests skip without a database URL. Existing tests may be edited where the design needs it; the CI oracle flags such edits for human review.
 
 ## Non-goals
 
-- Steps, input, result, failure, `started_at` or `completed_at` in the summary.
+- Steps, input, result, the raw failure payload, `started_at` or `completed_at` in the summary.
+- Truncating or redacting `last_error`.
 - A list-of-summaries endpoint or a `fields` selector on existing routes.
 - Changing `status` or `updated_at` semantics.
 - `packages/api-client` types or any UI.
@@ -42,17 +46,20 @@ An opportunity to capture: clients of the api-rs workflow-runs API that only nee
 
 ## Success signal
 
-Rust tests show that, for runs in each state and queue, the summary endpoint returns exactly the six fields with values equal to the full run endpoint's, and that an unknown run returns 404.
+Rust tests show that, for runs in each state and queue, the summary endpoint returns exactly the seven fields, that the six shared fields equal the full run endpoint's and `last_error` is the failure message for failed runs and `null` for every other run, and that an unknown run returns 404.
 
 ## Assumptions
 
 - The body follows the sibling routes' envelope: `{"ok": true, "summary": {...}}`.
 - The attempt count is the full run's `attempts` value, exposed under the key `attempts`.
 - `status` is the raw Absurd state string the full run reports.
+- A failure payload is the Absurd SDK's `{"name", "message"}` object, where `message` is the rendered error source chain; `last_error` is that message as stored, untruncated.
+- `last_error` is `null` for a non-failed run even where the full run's `failure` is non-null (existing tests seed one on every non-completed state).
 - A malformed (non-UUID) run id behaves as it does on the full endpoint; this work does not special-case it.
 
 ## Open Questions
 
 - Envelope: should the body be `{"ok": true, "summary": {...}}` (assumed, matches sibling routes) or the bare summary object?
 - Is "attempt count" the task-level `attempts` the full run reports, under the key `attempts`?
+- Should `last_error` be capped in length for small payloads (the SDK message can include a long source chain), and should a failed run whose payload lacks a `message` expose its compact JSON text (specified) or `null`?
 - `get_run` casts the id to uuid, so a malformed run id likely yields a 500 on the full endpoint today; should the summary answer 404 or 400 for it?

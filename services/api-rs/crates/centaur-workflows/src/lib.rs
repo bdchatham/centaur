@@ -541,6 +541,52 @@ struct ToolResult {
     output: Value,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkflowRunState {
+    Pending,
+    Running,
+    Sleeping,
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+impl WorkflowRunState {
+    pub const ALL: [Self; 6] = [
+        Self::Pending,
+        Self::Running,
+        Self::Sleeping,
+        Self::Completed,
+        Self::Failed,
+        Self::Cancelled,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Running => "running",
+            Self::Sleeping => "sleeping",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+        }
+    }
+}
+
+impl std::str::FromStr for WorkflowRunState {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .into_iter()
+            .find(|state| state.as_str() == value)
+            .ok_or_else(|| {
+                let valid = Self::ALL.map(Self::as_str).join(", ");
+                format!("invalid workflow run state `{value}`; valid states: {valid}")
+            })
+    }
+}
+
 fn list_runs_limit(limit: i64) -> i64 {
     limit.clamp(1, MAX_LIST_RUNS_LIMIT)
 }
@@ -923,22 +969,32 @@ impl WorkflowRuntime {
         limit: i64,
         workflow_name: Option<&str>,
     ) -> Result<Vec<WorkflowRun>, WorkflowRuntimeError> {
+        self.list_runs_by_state(limit, workflow_name, None).await
+    }
+
+    pub async fn list_runs_by_state(
+        &self,
+        limit: i64,
+        workflow_name: Option<&str>,
+        state: Option<WorkflowRunState>,
+    ) -> Result<Vec<WorkflowRun>, WorkflowRuntimeError> {
         let limit = list_runs_limit(limit);
+        let state = state.map(WorkflowRunState::as_str);
         let mut runs = Vec::new();
         runs.extend(
-            self.list_runs_for_queue(WORKFLOW_QUEUE, limit, workflow_name)
+            self.list_runs_for_queue(WORKFLOW_QUEUE, limit, workflow_name, state)
                 .await?,
         );
         runs.extend(
-            self.list_runs_for_queue(WORKFLOW_SLACK_LIVE_QUEUE, limit, workflow_name)
+            self.list_runs_for_queue(WORKFLOW_SLACK_LIVE_QUEUE, limit, workflow_name, state)
                 .await?,
         );
         runs.extend(
-            self.list_runs_for_queue(WORKFLOW_ETL_QUEUE, limit, workflow_name)
+            self.list_runs_for_queue(WORKFLOW_ETL_QUEUE, limit, workflow_name, state)
                 .await?,
         );
         runs.extend(
-            self.list_runs_for_queue(WORKFLOW_ETL_BACKFILL_QUEUE, limit, workflow_name)
+            self.list_runs_for_queue(WORKFLOW_ETL_BACKFILL_QUEUE, limit, workflow_name, state)
                 .await?,
         );
         runs.sort_by(|a, b| {
@@ -955,6 +1011,7 @@ impl WorkflowRuntime {
         queue_name: &str,
         limit: i64,
         workflow_name: Option<&str>,
+        state: Option<&str>,
     ) -> Result<Vec<WorkflowRun>, WorkflowRuntimeError> {
         let (task_table, run_table) = absurd_queue_tables(queue_name)?;
         let rows = sqlx::query(&format!(
@@ -1000,12 +1057,14 @@ impl WorkflowRuntime {
                 $2::text is null
                 or coalesce(t.params->>'workflow_name', '{WORKFLOW_TASK}') = $2
             )
+            and ($3::text is null or t.state = $3)
             order by t.enqueue_at desc, t.task_id desc
             limit $1
             "#,
         ))
         .bind(limit)
         .bind(workflow_name)
+        .bind(state)
         .fetch_all(self.inner.client.pool())
         .await?;
 

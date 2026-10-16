@@ -1,0 +1,4 @@
+- id: "1"
+  title: List workflow runs by state over GET /api/workflows/runs
+  description: >-
+    Make `GET /api/workflows/runs` accept `?state=` for the six run states, filtered in SQL per queue before `limit` and combined with `workflow_name`, with a 400 naming all six states for any unknown, empty, or wrongly cased value checked before the runtime lookup (CAP-1, CAP-2, CAP-3); the state type and `list_runs` shape are the dev's choice. Prove it with a new `centaur-api-server/tests/runs_by_state_http.rs` that only issues HTTP requests: DB-free tests assert `?state=bogus`, `?state=` and `?state=Running` return 400 naming all six states, and DB-backed tests (skipped without a database URL) seed runs in all six states over several queues and assert `?state=X` returns exactly those runs, combines with `limit` and `workflow_name`, returns a live run behind more than `limit` newer finished runs, and that omitting `state` is unchanged.

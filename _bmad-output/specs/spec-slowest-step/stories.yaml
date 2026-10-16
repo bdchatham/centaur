@@ -1,0 +1,14 @@
+- id: "1"
+  title: Choose the slowest step from a run's step entries
+  description: >-
+    Add a pure selection function over the run-steps step entries, unchanged, returning the entry with the largest `duration_ms`, the earlier entry on a tie, none for an empty list or when every `duration_ms` is null (CAP-1, CAP-2, CAP-4). Prove it with a new test file, for example `centaur-api-server/tests/slowest_step_select.rs`, that builds entries with the run-steps entry type and asserts on the chosen entry, tie order, null skipping and the empty cases.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Requires the run-steps entry type to carry `duration_ms`; that change belongs to the run-steps spec, not this story. Do not add fields to the step history here.
+- id: "2"
+  title: Serve GET /api/workflows/runs/{run_id}/slowest-step
+  description: >-
+    Add the route and its `WorkflowsRead` entry in `route_access`, returning `{"ok": true, "slowest_step": {name, duration_ms}}` from the same step entries the steps endpoint serves, `slowest_step` null for a run with no ranked step and the standard 404 error body for an unknown run (CAP-1, CAP-3, CAP-4). Prove it with a new `centaur-api-server/tests/slowest_step_http.rs` that only issues HTTP requests: DB-backed tests (skipped without a database URL) seed runs on all four queues with checkpoint steps of differing durations and assert the returned name and `duration_ms`, equality with the matching `/steps` entry, a null result for a run without durations, and 404 with `ok` false for an unknown run id.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Reuse the step-entry reader behind `/steps`; do not add fields to the step history. Seeding durations depends on how the run-steps spec stores them.

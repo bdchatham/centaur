@@ -2392,9 +2392,19 @@ async fn list_workflow_runs(
     State(state): State<AppState>,
     Query(query): Query<ListWorkflowRunsQuery>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    let run_state = query
+        .state
+        .as_deref()
+        .map(str::parse::<centaur_workflows::WorkflowRunState>)
+        .transpose()
+        .map_err(ApiError::BadRequest)?;
     let workflows = workflow_runtime(&state)?;
     let runs = workflows
-        .list_runs(query.limit.unwrap_or(50), query.workflow_name.as_deref())
+        .list_runs_by_state(
+            query.limit.unwrap_or(50),
+            query.workflow_name.as_deref(),
+            run_state,
+        )
         .await?;
     Ok(Json(json!({ "ok": true, "runs": runs })))
 }

@@ -1,0 +1,12 @@
+- id: "1"
+  title: Serve GET /api/workflows/runs/{run_id}/timeline with the run's events grouped by attempt, from a shared public reader
+  description: >-
+    Add a public `run_timeline` reader on `WorkflowRuntime` that calls the events reader and returns one `{"attempt", "events"}` group per distinct `attempt` value, ascending, each holding the reader's entries unchanged in order (not-found error for an unknown run, as `get_run`), plus the route returning `{"ok": true, "attempts": <reader value unchanged>}`, its `WorkflowsRead` entry in `route_access` and the standard 404 body (CAP-1, CAP-2, CAP-4, CAP-5). Prove it with a new `centaur-api-server/tests/run_timeline_http.rs` that seeds runs on all four queues (unstarted, completed, and retried twice with rows inserted out of attempt order) and asserts over HTTP the group attempts and order, that each event sits in the group of its own `attempt`, that the groups' events concatenated equal the `events` of `GET /api/workflows/runs/{run_id}/events` for the same run, that the same timeline comes from any attempt's run id, and 404 with `ok` false for an unknown run, and a new `centaur-api-server/tests/run_timeline_reader.rs` that calls the public reader directly and asserts the same groups and the not-found error.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Needs the events reader from spec-run-events with `attempt` on each entry; do not add or change fields of its entries here. If the reader or `attempt` is missing, stop and report that dependency instead of inferring attempts.
+- id: "2"
+  title: Report the time between events and each attempt's duration
+  description: >-
+    Add `intervals` (`{"from", "to", "millis"}` per consecutive pair of the run's events, placed in the later event's group, so the wait before a retry is charged to the retried attempt) and `duration_millis` (their sum) to every group, with a single-event first group empty and 0 (CAP-3). Prove it with a new `centaur-api-server/tests/run_timeline_intervals_http.rs` that seeds, on every queue, a started-and-completed run, a failed run, a cancelled-before-start run and a run retried twice with known timestamps, and asserts over HTTP the exact `from`, `to` and whole-millisecond `millis` of every interval, the group each interval is in, `duration_millis` as the sum per group, and that the event entries inside the groups are still those of the events endpoint.
+  spec_checkpoint: true

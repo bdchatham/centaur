@@ -1,0 +1,5 @@
+- id: "1"
+  title: Serve GET /api/workflows/runs/{run_id}/duration with whole milliseconds, null while unended, and a 404 for unknown runs
+  description: >-
+    Add the route and its `WorkflowsRead` entry in `route_access`, returning `{"ok": true, "duration_ms": <integer or null>}` where the value is the full run's `completed_at` minus `started_at` in truncated whole milliseconds, null for a run with no `completed_at` or no `started_at`, and the standard 404 error body for an unknown run (CAP-1, CAP-2, CAP-3). Prove it with a new `centaur-api-server/tests/run_duration_http.rs` that only issues HTTP requests: DB-backed tests (skipped without a database URL) seed completed and failed runs with known start and end times (including a sub-millisecond remainder and a run retried once, whose start is its first attempt's) and pending, running, sleeping and cancelled-before-start runs over all four queues, and assert the exact two keys, that the duration equals the truncated difference of `started_at` and `completed_at` from `GET /api/workflows/runs/{run_id}`, that unended runs give null, and that an unknown run id returns 404 with `ok` false.
+  spec_checkpoint: true

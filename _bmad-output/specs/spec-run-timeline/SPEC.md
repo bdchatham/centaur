@@ -32,7 +32,7 @@ A pain to solve: an on-call engineer looking at a retried workflow run can list 
 
 ## Constraints
 
-- Hard dependency: every event entry must carry `attempt`, the number of the attempt it belongs to, and `spec-run-events` currently fixes its entries to exactly `kind` and `at` and forbids an attempt number (its CAP-6). This brief must not add fields to the event entries itself, so the timeline cannot be built or proven until that spec's reader supplies `attempt` (challenged on that spec).
+- Dependency: the events reader (`spec-run-events`) gives every entry exactly `kind`, `at` and `attempt`, `attempt` being a positive integer, the number of the attempt the event belongs to. This brief relies on `attempt` and must not add fields to the event entries itself; the timeline cannot be built until that reader exists.
 - Attempts are never inferred by counting `retried` events; the grouping key is the entry's own `attempt`.
 - Additive only: existing routes, `WorkflowRun`, the list and get responses and the events endpoint keep their shape and semantics; no migration.
 - The timeline is computed from the events reader's output on each request: no process-local source of truth, no new table, no second query for event times.
@@ -57,12 +57,10 @@ Rust tests show that, for runs on each queue, the timeline endpoint returns the 
 
 - The body follows the sibling routes' envelope: `{"ok": true, "attempts": [...]}`.
 - `{run_id}` is a run row id as on the full endpoint; any attempt's run id returns the whole timeline of its task.
-- A `retried` event carries the attempt it starts (k at least 2), `created` and `started` carry 1 and a terminal event carries the last attempt's number; `spec-run-events` must confirm this when it adds `attempt`.
+- Per `spec-run-events`, a `retried` event carries the attempt it starts (k at least 2), `created` and `started` carry 1 and a terminal event carries the task's last attempt; a run cancelled while a retry is pending has its `retried` and `cancelled` events in the same group.
 - `millis` is never negative because the events reader orders events by `at`; a group of a single event with no predecessor in the run has an empty `intervals` and `duration_millis` 0.
 
 ## Open Questions
 
-- Will `spec-run-events` add `attempt` to its entries (this spec cannot be implemented until it does), and which attempt does a `retried` event carry: the one it schedules or the failed one before it?
-- Is an interval charged to the group of the later event (specified), or should the wait before a retry count toward the failed attempt?
 - Envelope: `{"ok": true, "attempts": [...]}` (assumed) or a bare list?
 - `get_run` casts the id to uuid, so a malformed run id likely yields a 500 on the full endpoint today; should `/timeline` answer 404 or 400 for it?

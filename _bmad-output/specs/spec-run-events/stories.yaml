@@ -1,0 +1,15 @@
+- id: "1"
+  title: Serve GET /api/workflows/runs/{run_id}/events from a shared public event reader, with created and started events and a 404 for unknown runs
+  description: >-
+    Add a public reader on `WorkflowRuntime` returning the run's events oldest first as a serializable type of exactly `kind` and `at` (not-found error for an unknown run, as `get_run`), with `created` from the task's `enqueue_at` and `started` from its `first_started_at` when set, plus the route returning `{"ok": true, "events": <reader events unchanged>}`, its `WorkflowsRead` entry in `route_access`, and the standard 404 body (CAP-1, CAP-2, CAP-3, CAP-6, CAP-7, CAP-8). Prove it with a new `centaur-api-server/tests/run_events_http.rs` that seeds pending and running runs on all four queues, with distinctive input, result, failure and id values, and asserts over HTTP the exact two keys, RFC 3339 `at`, `created` alone for an unstarted run and `created` then `started` for a started one, that the distinctive values never appear in the body, and 404 with `ok` false for an unknown run, and a new `centaur-api-server/tests/run_events_reader.rs` that calls the public reader directly and asserts the same events and the not-found error.
+  spec_checkpoint: true
+- id: "2"
+  title: Report completed, failed and cancelled events at the run's end time
+  description: >-
+    Append to the reader's events a single `completed`, `failed` or `cancelled` event when the task's state is terminal, with `at` equal to the run's `completed_at` as `get_run_for_queue` derives it, and none for a run that has not ended (CAP-5). Prove it with a new `centaur-api-server/tests/run_events_terminal_http.rs` that seeds completed, failed, cancelled-after-start and cancelled-before-start runs on every queue and asserts over HTTP the events (`created`, `started`, terminal; `created`, terminal for the unstarted cancelled run), that the terminal `at` equals the `completed_at` returned by `GET /api/workflows/runs/{run_id}`, that there is exactly one terminal event, and that pending, running and sleeping runs have none.
+  spec_checkpoint: true
+- id: "3"
+  title: Report one retried event per retry attempt
+  description: >-
+    Add a `retried` event for every row of the task's `absurd.r_<queue>` with `attempt` above 1, at that row's `created_at`, ordered by `at` with ties broken by lifecycle order and unaffected by the order the rows were stored in, so that a failed attempt that was retried never yields `failed` (CAP-2, CAP-4). Prove it with a new `centaur-api-server/tests/run_events_retried_http.rs` that seeds, on every queue, a run retried twice whose rows are inserted out of attempt order, a run retried once and then completed, failed or cancelled, and a run retried once and still pending, and asserts over HTTP the exact event kinds, the `retried` timestamps, the order, that retried runs expose the same history from any of their attempts' run ids, and that no `failed` event appears for an attempt that was retried.
+  spec_checkpoint: true

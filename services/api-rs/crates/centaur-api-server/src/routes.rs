@@ -2398,12 +2398,25 @@ async fn list_workflow_runs(
         .map(str::parse::<centaur_workflows::WorkflowRunState>)
         .transpose()
         .map_err(ApiError::BadRequest)?;
+    let created_after = query
+        .created_after
+        .as_deref()
+        .map(|value| {
+            time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339)
+                .map_err(|error| {
+                    ApiError::BadRequest(format!(
+                        "created_after must be an RFC 3339 timestamp with a UTC offset, e.g. 2024-01-01T00:00:00Z: {error}"
+                    ))
+                })
+        })
+        .transpose()?;
     let workflows = workflow_runtime(&state)?;
     let runs = workflows
         .list_runs_by_state(
             query.limit.unwrap_or(50),
             query.workflow_name.as_deref(),
             run_state,
+            created_after,
         )
         .await?;
     Ok(Json(json!({ "ok": true, "runs": runs })))

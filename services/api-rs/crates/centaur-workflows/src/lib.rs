@@ -969,7 +969,8 @@ impl WorkflowRuntime {
         limit: i64,
         workflow_name: Option<&str>,
     ) -> Result<Vec<WorkflowRun>, WorkflowRuntimeError> {
-        self.list_runs_by_state(limit, workflow_name, None).await
+        self.list_runs_by_state(limit, workflow_name, None, None)
+            .await
     }
 
     pub async fn list_runs_by_state(
@@ -977,25 +978,44 @@ impl WorkflowRuntime {
         limit: i64,
         workflow_name: Option<&str>,
         state: Option<WorkflowRunState>,
+        created_after: Option<OffsetDateTime>,
     ) -> Result<Vec<WorkflowRun>, WorkflowRuntimeError> {
         let limit = list_runs_limit(limit);
         let state = state.map(WorkflowRunState::as_str);
         let mut runs = Vec::new();
         runs.extend(
-            self.list_runs_for_queue(WORKFLOW_QUEUE, limit, workflow_name, state)
+            self.list_runs_for_queue(WORKFLOW_QUEUE, limit, workflow_name, state, created_after)
                 .await?,
         );
         runs.extend(
-            self.list_runs_for_queue(WORKFLOW_SLACK_LIVE_QUEUE, limit, workflow_name, state)
-                .await?,
+            self.list_runs_for_queue(
+                WORKFLOW_SLACK_LIVE_QUEUE,
+                limit,
+                workflow_name,
+                state,
+                created_after,
+            )
+            .await?,
         );
         runs.extend(
-            self.list_runs_for_queue(WORKFLOW_ETL_QUEUE, limit, workflow_name, state)
-                .await?,
+            self.list_runs_for_queue(
+                WORKFLOW_ETL_QUEUE,
+                limit,
+                workflow_name,
+                state,
+                created_after,
+            )
+            .await?,
         );
         runs.extend(
-            self.list_runs_for_queue(WORKFLOW_ETL_BACKFILL_QUEUE, limit, workflow_name, state)
-                .await?,
+            self.list_runs_for_queue(
+                WORKFLOW_ETL_BACKFILL_QUEUE,
+                limit,
+                workflow_name,
+                state,
+                created_after,
+            )
+            .await?,
         );
         runs.sort_by(|a, b| {
             b.created_at
@@ -1012,6 +1032,7 @@ impl WorkflowRuntime {
         limit: i64,
         workflow_name: Option<&str>,
         state: Option<&str>,
+        created_after: Option<OffsetDateTime>,
     ) -> Result<Vec<WorkflowRun>, WorkflowRuntimeError> {
         let (task_table, run_table) = absurd_queue_tables(queue_name)?;
         let rows = sqlx::query(&format!(
@@ -1058,6 +1079,7 @@ impl WorkflowRuntime {
                 or coalesce(t.params->>'workflow_name', '{WORKFLOW_TASK}') = $2
             )
             and ($3::text is null or t.state = $3)
+            and ($4::timestamptz is null or t.enqueue_at > $4)
             order by t.enqueue_at desc, t.task_id desc
             limit $1
             "#,
@@ -1065,6 +1087,7 @@ impl WorkflowRuntime {
         .bind(limit)
         .bind(workflow_name)
         .bind(state)
+        .bind(created_after)
         .fetch_all(self.inner.client.pool())
         .await?;
 

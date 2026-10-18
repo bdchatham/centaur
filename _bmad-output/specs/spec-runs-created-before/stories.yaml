@@ -1,0 +1,5 @@
+- id: "1"
+  title: List workflow runs created before a time over GET /api/workflows/runs
+  description: >-
+    Make `GET /api/workflows/runs` accept `?created_before=<RFC 3339>`, validated before the runtime lookup (400 naming `created_before` and RFC 3339 for any invalid value) and applied in SQL per queue as a strict `created_at` upper bound before `limit`, combined with `limit`, `workflow_name`, `state` and `created_after` (CAP-1, CAP-2, CAP-3); the `list_runs_by_state` shape and helper types are the dev's choice. Prove it with a new `centaur-api-server/tests/runs_created_before_http.rs` that only issues HTTP requests: DB-free tests assert garbage, empty, date-only and offset-less values return 400, and DB-backed tests (skipped without a database URL) seed runs at known times over several queues and assert only strictly earlier runs return newest first, a run at exactly the bound and offset-equivalent bounds behave as instants, the filter combines with `limit`, `workflow_name`, `state` and `created_after`, and omitting it is unchanged.
+  spec_checkpoint: true

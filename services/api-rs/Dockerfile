@@ -35,6 +35,8 @@ COPY crates/absurd-sdk/ crates/absurd-sdk/
 COPY services/api-rs/ services/api-rs/
 WORKDIR /build/services/api-rs
 ARG RUST_BUILD_PROFILE=release
+ARG CENTAUR_GIT_COMMIT=
+ENV CENTAUR_GIT_COMMIT=${CENTAUR_GIT_COMMIT}
 RUN --mount=type=cache,id=api-rs-cargo-registry-${TARGETARCH},target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=api-rs-cargo-git-${TARGETARCH},target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=api-rs-sccache-${TARGETARCH},target=/var/cache/sccache,sharing=locked \

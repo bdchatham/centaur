@@ -347,6 +347,7 @@ mod tests {
             "/healthz",
             "/readyz",
             "/metrics",
+            "/api/version",
             "/.well-known/oauth-protected-resource",
             "/.well-known/oauth-protected-resource/mcp",
         ] {

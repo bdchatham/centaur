@@ -281,6 +281,7 @@ pub fn build_router_with_app_state(state: AppState) -> Router {
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
         .route("/metrics", get(metrics))
+        .route("/api/version", get(version))
         .route("/mcp", post(mcp_post).get(mcp_get))
         .route(
             "/.well-known/oauth-protected-resource",
@@ -338,6 +339,13 @@ pub fn build_router_with_app_state(state: AppState) -> Router {
     )
     .layer(middleware::from_fn(http_metrics))
     .with_state(state)
+}
+
+async fn version() -> Json<Value> {
+    Json(json!({
+        "version": env!("CARGO_PKG_VERSION"),
+        "git_commit": env!("CENTAUR_BUILD_GIT_COMMIT"),
+    }))
 }
 
 async fn healthz(headers: HeaderMap) -> Json<Value> {

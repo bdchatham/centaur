@@ -74,7 +74,7 @@ build-one service:
     esac
 
 _build-api-rs:
-    docker build -t centaur-api-rs:latest -f services/api-rs/Dockerfile .
+    docker build --build-arg CENTAUR_GIT_COMMIT="$(git rev-parse HEAD 2>/dev/null || true)" -t centaur-api-rs:latest -f services/api-rs/Dockerfile .
 
 _build-company-context:
     docker build -t centaur-company-context:latest -f services/company-context/Dockerfile .

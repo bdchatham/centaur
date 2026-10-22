@@ -1,0 +1,4 @@
+- id: "1"
+  title: Serve GET /api/version with the build's version and git commit
+  description: >-
+    Add a `build.rs` to `centaur-api-server` embedding the git commit (env `CENTAUR_GIT_COMMIT`, then `git rev-parse HEAD`, then `"unknown"`), a public `/api/version` route beside `/healthz` returning `{"version", "git_commit"}`, and the Dockerfile build arg plus Justfile pass-through (CAP-1 to CAP-3). Prove it with a new `centaur-api-server/tests/version_http.rs` that builds the router with `AppState::unready`, sends an unauthenticated `GET /api/version`, and asserts 200, that `version` and `git_commit` are non-empty strings, that `version` equals `env!("CARGO_PKG_VERSION")`, and that the body has exactly those two keys.

@@ -2408,6 +2408,12 @@ async fn list_workflow_runs(
         .map_err(ApiError::BadRequest)?;
     let created_after = parse_created_bound("created_after", query.created_after.as_deref())?;
     let created_before = parse_created_bound("created_before", query.created_before.as_deref())?;
+    let after = query
+        .cursor
+        .as_deref()
+        .map(centaur_workflows::RunListPosition::decode)
+        .transpose()
+        .map_err(ApiError::BadRequest)?;
     let workflows = workflow_runtime(&state)?;
     let page = workflows
         .list_runs_by_state(
@@ -2416,6 +2422,7 @@ async fn list_workflow_runs(
             run_state,
             created_after,
             created_before,
+            after,
         )
         .await?;
     Ok(Json(json!({

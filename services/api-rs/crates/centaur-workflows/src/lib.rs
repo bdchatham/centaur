@@ -602,6 +602,39 @@ fn run_list_cursor(run: &WorkflowRun) -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(format!("{micros}:{}", run.task_id))
 }
 
+/// A position in the run list: the exact `created_at` and `task_id` of the run
+/// a previous page ended on.
+#[derive(Clone, Copy, Debug)]
+pub struct RunListPosition {
+    created_at: OffsetDateTime,
+    task_id: uuid::Uuid,
+}
+
+impl RunListPosition {
+    /// Decodes a cursor issued as `next_cursor`; `Err` carries a 400 message.
+    pub fn decode(cursor: &str) -> Result<Self, String> {
+        use base64::Engine as _;
+        let invalid = || {
+            "cursor is not one this API issued; pass a next_cursor from a previous response unchanged".to_owned()
+        };
+        let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(cursor)
+            .map_err(|_| invalid())?;
+        let text = String::from_utf8(bytes).map_err(|_| invalid())?;
+        let (micros, task_id) = text.split_once(':').ok_or_else(invalid)?;
+        let micros: i128 = micros.parse().map_err(|_| invalid())?;
+        let created_at = micros
+            .checked_mul(1_000)
+            .and_then(|nanos| OffsetDateTime::from_unix_timestamp_nanos(nanos).ok())
+            .ok_or_else(invalid)?;
+        let task_id = uuid::Uuid::parse_str(task_id).map_err(|_| invalid())?;
+        Ok(Self {
+            created_at,
+            task_id,
+        })
+    }
+}
+
 #[derive(Clone, Copy)]
 struct CreatedBetween {
     after: Option<OffsetDateTime>,
@@ -990,7 +1023,7 @@ impl WorkflowRuntime {
         limit: i64,
         workflow_name: Option<&str>,
     ) -> Result<Vec<WorkflowRun>, WorkflowRuntimeError> {
-        self.list_runs_by_state(limit, workflow_name, None, None, None)
+        self.list_runs_by_state(limit, workflow_name, None, None, None, None)
             .await
             .map(|page| page.runs)
     }
@@ -1002,6 +1035,7 @@ impl WorkflowRuntime {
         state: Option<WorkflowRunState>,
         created_after: Option<OffsetDateTime>,
         created_before: Option<OffsetDateTime>,
+        after: Option<RunListPosition>,
     ) -> Result<WorkflowRunPage, WorkflowRuntimeError> {
         let limit = list_runs_limit(limit);
         // One row past the page tells whether a later page exists.
@@ -1019,7 +1053,7 @@ impl WorkflowRuntime {
             WORKFLOW_ETL_BACKFILL_QUEUE,
         ] {
             runs.extend(
-                self.list_runs_for_queue(queue_name, fetch, workflow_name, state, created)
+                self.list_runs_for_queue(queue_name, fetch, workflow_name, state, created, after)
                     .await?,
             );
         }
@@ -1045,6 +1079,7 @@ impl WorkflowRuntime {
         workflow_name: Option<&str>,
         state: Option<&str>,
         created: CreatedBetween,
+        after: Option<RunListPosition>,
     ) -> Result<Vec<WorkflowRun>, WorkflowRuntimeError> {
         let (task_table, run_table) = absurd_queue_tables(queue_name)?;
         let rows = sqlx::query(&format!(
@@ -1093,6 +1128,10 @@ impl WorkflowRuntime {
             and ($3::text is null or t.state = $3)
             and ($4::timestamptz is null or t.enqueue_at > $4)
             and ($5::timestamptz is null or t.enqueue_at < $5)
+            and (
+                $6::timestamptz is null
+                or (t.enqueue_at, t.task_id) < ($6::timestamptz, $7::text::uuid)
+            )
             order by t.enqueue_at desc, t.task_id desc
             limit $1
             "#,
@@ -1102,6 +1141,8 @@ impl WorkflowRuntime {
         .bind(state)
         .bind(created.after)
         .bind(created.before)
+        .bind(after.map(|position| position.created_at))
+        .bind(after.map(|position| position.task_id.to_string()))
         .fetch_all(self.inner.client.pool())
         .await?;
 

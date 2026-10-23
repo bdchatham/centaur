@@ -147,6 +147,7 @@ pub struct ListWorkflowRunsQuery {
     pub state: Option<String>,
     pub created_after: Option<String>,
     pub created_before: Option<String>,
+    pub cursor: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -590,7 +590,7 @@ async fn runs_created_before_combines_with_workflow_name_and_state() {
         for (name, state, minute) in [
             (&workflow_name, "running", 2 + i as i32),
             (&workflow_name, "running", 20 + i as i32),
-            (&workflow_name, "failed", 4 + i as i32),
+            (&workflow_name, "failed", 6 + i as i32),
             (&workflow_name, "failed", 30 + i as i32),
             (&other_name, "running", 8 + i as i32),
         ] {

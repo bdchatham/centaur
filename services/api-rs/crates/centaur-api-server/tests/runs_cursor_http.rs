@@ -393,10 +393,19 @@ macro_rules! database_or_skip {
 /// fixed across pages, as a client sends them) until it is `null`. Returns every
 /// page's run ids in order.
 async fn walk(router: &Router, query: &str) -> Vec<Vec<String>> {
-    let mut pages = Vec::new();
+    let mut pages: Vec<Vec<String>> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     let mut current = page(router, query).await;
     for _ in 0..2_000 {
-        pages.push(current.ids());
+        let ids = current.ids();
+        if let Some(repeat) = ids.iter().find(|id| seen.contains(*id)) {
+            panic!(
+                "page {} of the walk of `{query}` repeats run {repeat}, already returned",
+                pages.len()
+            );
+        }
+        seen.extend(ids.iter().cloned());
+        pages.push(ids);
         match current.next_cursor() {
             Some(Value::Null) => return pages,
             _ => {

@@ -361,9 +361,9 @@ async fn assert_runs(queue: &'static str, runs: Vec<Run>) {
                 .expect("get_run must succeed"),
         )
         .unwrap();
-        let http_get = http_json(&harness.router, &format!("/api/workflows/runs/{run_id}")).await
-            ["run"]
-            .clone();
+        let http_get =
+            http_json(&harness.router, &format!("/api/workflows/runs/{run_id}")).await["run"]
+                .clone();
         let surfaces = [
             ("list_runs", find(&listed)),
             ("get_run", fetched),

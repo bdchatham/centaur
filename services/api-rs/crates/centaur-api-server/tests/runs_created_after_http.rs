@@ -352,7 +352,7 @@ async fn seed_interleaved(pool: &sqlx::PgPool, per_queue: i32) -> (String, Vec<(
 /// Ids of the runs strictly after `bound_minute`, newest first.
 fn after(runs: &[(i32, String)], bound_minute: i32) -> Vec<String> {
     let mut later: Vec<&(i32, String)> = runs.iter().filter(|(m, _)| *m > bound_minute).collect();
-    later.sort_by(|a, b| b.0.cmp(&a.0));
+    later.sort_by_key(|a| std::cmp::Reverse(a.0));
     later.into_iter().map(|(_, id)| id.clone()).collect()
 }
 
@@ -367,8 +367,7 @@ async fn runs_created_after_garbage_is_400_naming_created_after_and_rfc_3339() {
 
 #[tokio::test]
 async fn runs_created_after_empty_is_400_naming_created_after_and_rfc_3339() {
-    assert_invalid_created_after_is_400(&router_without_workflow_runtime(), "created_after=")
-        .await;
+    assert_invalid_created_after_is_400(&router_without_workflow_runtime(), "created_after=").await;
 }
 
 #[tokio::test]
@@ -416,7 +415,11 @@ async fn runs_created_after_returns_only_strictly_later_runs_newest_first() {
             ),
         )
         .await;
-        assert_eq!(run_ids(&listed), after(&runs, bound), "bound minute {bound}");
+        assert_eq!(
+            run_ids(&listed),
+            after(&runs, bound),
+            "bound minute {bound}"
+        );
     }
     harness.pool.close().await;
 }
@@ -433,7 +436,10 @@ async fn runs_created_after_excludes_a_run_created_exactly_at_the_bound() {
     let (_, at_bound) = runs.iter().find(|(m, _)| *m == 6).unwrap();
     let listed = list(
         &harness.router,
-        &format!("limit=100&workflow_name={workflow_name}&created_after={}", at_utc(6)),
+        &format!(
+            "limit=100&workflow_name={workflow_name}&created_after={}",
+            at_utc(6)
+        ),
     )
     .await;
     assert!(
@@ -444,9 +450,7 @@ async fn runs_created_after_excludes_a_run_created_exactly_at_the_bound() {
 
     let just_before = list(
         &harness.router,
-        &format!(
-            "limit=100&workflow_name={workflow_name}&created_after=2024-01-01T00:05:59.999Z"
-        ),
+        &format!("limit=100&workflow_name={workflow_name}&created_after=2024-01-01T00:05:59.999Z"),
     )
     .await;
     assert!(
@@ -511,10 +515,16 @@ async fn runs_created_after_a_bound_later_than_every_run_is_200_and_empty() {
 
     let far_future = list(
         &harness.router,
-        &format!("limit=100&created_after={}", query_value("2099-01-01T00:00:00Z")),
+        &format!(
+            "limit=100&created_after={}",
+            query_value("2099-01-01T00:00:00Z")
+        ),
     )
     .await;
-    assert!(far_future.is_empty(), "nothing is created after 2099: {far_future:?}");
+    assert!(
+        far_future.is_empty(),
+        "nothing is created after 2099: {far_future:?}"
+    );
     harness.pool.close().await;
 }
 
@@ -536,7 +546,11 @@ async fn runs_created_after_limit_counts_matching_runs_across_all_queues() {
         &format!("limit=5&workflow_name={workflow_name}&created_after={bound}"),
     )
     .await;
-    assert_eq!(run_ids(&limited), later[..5].to_vec(), "newest 5 after the bound");
+    assert_eq!(
+        run_ids(&limited),
+        later[..5].to_vec(),
+        "newest 5 after the bound"
+    );
 
     let one_per_queue_window = list(
         &harness.router,
@@ -550,7 +564,11 @@ async fn runs_created_after_limit_counts_matching_runs_across_all_queues() {
         &format!("limit=100&workflow_name={workflow_name}&created_after={bound}"),
     )
     .await;
-    assert_eq!(run_ids(&roomy), later, "fewer matches than limit returns them all");
+    assert_eq!(
+        run_ids(&roomy),
+        later,
+        "fewer matches than limit returns them all"
+    );
     harness.pool.close().await;
 }
 
@@ -582,7 +600,7 @@ async fn runs_created_after_combines_with_workflow_name_and_state() {
             .iter()
             .filter(|(_, n, s, m, _)| *n == name && state.is_none_or(|st| st == *s) && *m > bound)
             .collect();
-        rows.sort_by(|a, b| b.3.cmp(&a.3));
+        rows.sort_by_key(|a| std::cmp::Reverse(a.3));
         rows.into_iter().map(|r| r.4.clone()).collect()
     };
     let bound = at_utc(10);
@@ -592,7 +610,10 @@ async fn runs_created_after_combines_with_workflow_name_and_state() {
         &format!("state=running&limit=100&workflow_name={workflow_name}&created_after={bound}"),
     )
     .await;
-    assert_eq!(run_ids(&running), expect(&workflow_name, Some("running"), 10));
+    assert_eq!(
+        run_ids(&running),
+        expect(&workflow_name, Some("running"), 10)
+    );
     assert_eq!(running.len(), 4);
     for run in &running {
         assert_eq!(run["status"], json!("running"));
@@ -633,9 +654,7 @@ async fn runs_created_after_combines_with_workflow_name_and_state() {
 
     let none = list(
         &harness.router,
-        &format!(
-            "state=cancelled&limit=100&workflow_name={workflow_name}&created_after={bound}"
-        ),
+        &format!("state=cancelled&limit=100&workflow_name={workflow_name}&created_after={bound}"),
     )
     .await;
     assert!(none.is_empty(), "no cancelled runs: {none:?}");
@@ -651,7 +670,11 @@ async fn runs_created_after_omitting_it_returns_every_run_as_before() {
     let _serial = SETUP_LOCK.lock().await;
     let harness = harness(&url).await;
     let (workflow_name, runs) = seed_interleaved(&harness.pool, 4).await;
-    let listed = list(&harness.router, &format!("limit=100&workflow_name={workflow_name}")).await;
+    let listed = list(
+        &harness.router,
+        &format!("limit=100&workflow_name={workflow_name}"),
+    )
+    .await;
     assert_eq!(run_ids(&listed), after(&runs, -1), "all runs, newest first");
     assert_eq!(listed.len(), 16);
     harness.pool.close().await;

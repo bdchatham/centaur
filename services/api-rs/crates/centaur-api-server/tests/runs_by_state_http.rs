@@ -147,9 +147,8 @@ fn session_runtime(pool: sqlx::PgPool) -> SessionRuntime {
 
 /// Router with no workflow runtime and a pool that never connects.
 fn router_without_workflow_runtime() -> Router {
-    let pool =
-        sqlx::PgPool::connect_lazy("postgres://postgres:postgres@127.0.0.1:1/runs_by_state")
-            .expect("lazy pool");
+    let pool = sqlx::PgPool::connect_lazy("postgres://postgres:postgres@127.0.0.1:1/runs_by_state")
+        .expect("lazy pool");
     build_router_with_session_and_workflow_runtime(
         session_runtime(pool),
         None,

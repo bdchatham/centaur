@@ -2406,18 +2406,8 @@ async fn list_workflow_runs(
         .map(str::parse::<centaur_workflows::WorkflowRunState>)
         .transpose()
         .map_err(ApiError::BadRequest)?;
-    let created_after = query
-        .created_after
-        .as_deref()
-        .map(|value| {
-            time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339)
-                .map_err(|error| {
-                    ApiError::BadRequest(format!(
-                        "created_after must be an RFC 3339 timestamp with a UTC offset, e.g. 2024-01-01T00:00:00Z: {error}"
-                    ))
-                })
-        })
-        .transpose()?;
+    let created_after = parse_created_bound("created_after", query.created_after.as_deref())?;
+    let created_before = parse_created_bound("created_before", query.created_before.as_deref())?;
     let workflows = workflow_runtime(&state)?;
     let runs = workflows
         .list_runs_by_state(
@@ -2425,9 +2415,26 @@ async fn list_workflow_runs(
             query.workflow_name.as_deref(),
             run_state,
             created_after,
+            created_before,
         )
         .await?;
     Ok(Json(json!({ "ok": true, "runs": runs })))
+}
+
+fn parse_created_bound(
+    name: &str,
+    value: Option<&str>,
+) -> Result<Option<time::OffsetDateTime>, ApiError> {
+    value
+        .map(|value| {
+            time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339)
+                .map_err(|error| {
+                    ApiError::BadRequest(format!(
+                        "{name} must be an RFC 3339 timestamp with a UTC offset, e.g. 2024-01-01T00:00:00Z: {error}"
+                    ))
+                })
+        })
+        .transpose()
 }
 
 async fn list_workflow_schedules(

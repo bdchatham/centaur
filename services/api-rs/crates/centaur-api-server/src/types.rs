@@ -146,6 +146,7 @@ pub struct ListWorkflowRunsQuery {
     pub workflow_name: Option<String>,
     pub state: Option<String>,
     pub created_after: Option<String>,
+    pub created_before: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

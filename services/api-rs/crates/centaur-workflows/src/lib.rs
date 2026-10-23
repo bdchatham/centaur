@@ -587,6 +587,21 @@ impl std::str::FromStr for WorkflowRunState {
     }
 }
 
+/// One page of the run list and the opaque cursor naming its last run, when
+/// more matching runs lie past it.
+#[derive(Clone, Debug)]
+pub struct WorkflowRunPage {
+    pub runs: Vec<WorkflowRun>,
+    pub next_cursor: Option<String>,
+}
+
+/// Encodes a run's exact microsecond `created_at` and `task_id` as URL-safe text.
+fn run_list_cursor(run: &WorkflowRun) -> String {
+    use base64::Engine as _;
+    let micros = run.created_at.unix_timestamp_nanos().div_euclid(1_000);
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(format!("{micros}:{}", run.task_id))
+}
+
 #[derive(Clone, Copy)]
 struct CreatedBetween {
     after: Option<OffsetDateTime>,
@@ -977,6 +992,7 @@ impl WorkflowRuntime {
     ) -> Result<Vec<WorkflowRun>, WorkflowRuntimeError> {
         self.list_runs_by_state(limit, workflow_name, None, None, None)
             .await
+            .map(|page| page.runs)
     }
 
     pub async fn list_runs_by_state(
@@ -986,49 +1002,40 @@ impl WorkflowRuntime {
         state: Option<WorkflowRunState>,
         created_after: Option<OffsetDateTime>,
         created_before: Option<OffsetDateTime>,
-    ) -> Result<Vec<WorkflowRun>, WorkflowRuntimeError> {
+    ) -> Result<WorkflowRunPage, WorkflowRuntimeError> {
         let limit = list_runs_limit(limit);
+        // One row past the page tells whether a later page exists.
+        let fetch = limit + 1;
         let state = state.map(WorkflowRunState::as_str);
         let created = CreatedBetween {
             after: created_after,
             before: created_before,
         };
         let mut runs = Vec::new();
-        runs.extend(
-            self.list_runs_for_queue(WORKFLOW_QUEUE, limit, workflow_name, state, created)
-                .await?,
-        );
-        runs.extend(
-            self.list_runs_for_queue(
-                WORKFLOW_SLACK_LIVE_QUEUE,
-                limit,
-                workflow_name,
-                state,
-                created,
-            )
-            .await?,
-        );
-        runs.extend(
-            self.list_runs_for_queue(WORKFLOW_ETL_QUEUE, limit, workflow_name, state, created)
-                .await?,
-        );
-        runs.extend(
-            self.list_runs_for_queue(
-                WORKFLOW_ETL_BACKFILL_QUEUE,
-                limit,
-                workflow_name,
-                state,
-                created,
-            )
-            .await?,
-        );
+        for queue_name in [
+            WORKFLOW_QUEUE,
+            WORKFLOW_SLACK_LIVE_QUEUE,
+            WORKFLOW_ETL_QUEUE,
+            WORKFLOW_ETL_BACKFILL_QUEUE,
+        ] {
+            runs.extend(
+                self.list_runs_for_queue(queue_name, fetch, workflow_name, state, created)
+                    .await?,
+            );
+        }
         runs.sort_by(|a, b| {
             b.created_at
                 .cmp(&a.created_at)
                 .then(b.task_id.cmp(&a.task_id))
         });
+        let has_more = runs.len() > limit as usize;
         runs.truncate(limit as usize);
-        Ok(runs)
+        let next_cursor = if has_more {
+            runs.last().map(run_list_cursor)
+        } else {
+            None
+        };
+        Ok(WorkflowRunPage { runs, next_cursor })
     }
 
     async fn list_runs_for_queue(

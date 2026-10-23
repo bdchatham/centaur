@@ -2409,7 +2409,7 @@ async fn list_workflow_runs(
     let created_after = parse_created_bound("created_after", query.created_after.as_deref())?;
     let created_before = parse_created_bound("created_before", query.created_before.as_deref())?;
     let workflows = workflow_runtime(&state)?;
-    let runs = workflows
+    let page = workflows
         .list_runs_by_state(
             query.limit.unwrap_or(50),
             query.workflow_name.as_deref(),
@@ -2418,7 +2418,11 @@ async fn list_workflow_runs(
             created_before,
         )
         .await?;
-    Ok(Json(json!({ "ok": true, "runs": runs })))
+    Ok(Json(json!({
+        "ok": true,
+        "runs": page.runs,
+        "next_cursor": page.next_cursor,
+    })))
 }
 
 fn parse_created_bound(

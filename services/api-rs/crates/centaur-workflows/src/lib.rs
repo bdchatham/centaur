@@ -602,6 +602,11 @@ fn run_list_cursor(run: &WorkflowRun) -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(format!("{micros}:{}", run.task_id))
 }
 
+/// Postgres's earliest timestamp (4714-11-24 BC) and its exclusive end (294277-01-01), in
+/// microseconds since the Unix epoch; a cursor outside them cannot name a stored `enqueue_at`.
+const POSTGRES_MIN_TIMESTAMP_UNIX_MICROS: i128 = -210_866_803_200_000_000;
+const POSTGRES_END_TIMESTAMP_UNIX_MICROS: i128 = 9_223_372_277_884_800_000;
+
 /// A position in the run list: the exact `created_at` and `task_id` of the run
 /// a previous page ended on.
 #[derive(Clone, Copy, Debug)]
@@ -623,6 +628,11 @@ impl RunListPosition {
         let text = String::from_utf8(bytes).map_err(|_| invalid())?;
         let (micros, task_id) = text.split_once(':').ok_or_else(invalid)?;
         let micros: i128 = micros.parse().map_err(|_| invalid())?;
+        if !(POSTGRES_MIN_TIMESTAMP_UNIX_MICROS..POSTGRES_END_TIMESTAMP_UNIX_MICROS)
+            .contains(&micros)
+        {
+            return Err(invalid());
+        }
         let created_at = micros
             .checked_mul(1_000)
             .and_then(|nanos| OffsetDateTime::from_unix_timestamp_nanos(nanos).ok())

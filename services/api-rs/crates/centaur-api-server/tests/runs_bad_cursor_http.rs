@@ -26,24 +26,13 @@ use centaur_sandbox_core::{
     SandboxResult, SandboxSpec, SandboxStatus,
 };
 use centaur_session_sqlx::PgSessionStore;
-use centaur_workflows::{
-    WORKFLOW_ETL_BACKFILL_QUEUE, WORKFLOW_ETL_QUEUE, WORKFLOW_QUEUE, WORKFLOW_SLACK_LIVE_QUEUE,
-    WorkflowPrincipalRegistrar, WorkflowRuntime,
-};
+use centaur_workflows::{WORKFLOW_QUEUE, WorkflowPrincipalRegistrar, WorkflowRuntime};
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
-const QUEUES: [&str; 4] = [
-    WORKFLOW_QUEUE,
-    WORKFLOW_SLACK_LIVE_QUEUE,
-    WORKFLOW_ETL_QUEUE,
-    WORKFLOW_ETL_BACKFILL_QUEUE,
-];
 const FAR_FUTURE: &str = "2099-01-01T00:00:00Z";
 const BASE: &str = "2024-01-01T00:00:00Z";
-
-static SETUP_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[derive(Default)]
 struct NoSandboxBackend;
